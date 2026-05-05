@@ -4,14 +4,8 @@
 
 ### Step 1: Generate Icons
 
-Open a terminal in this folder and run ONE of these commands:
+Open a terminal in this folder and run this command:
 
-**Option A - Python (Most Common)**
-```bash
-python generate-icons.py
-```
-
-**Option B - Node.js**
 ```bash
 npm install canvas
 node generate-icons.js
@@ -85,7 +79,6 @@ Want to modify the extension? Here's what each file does:
 - **popup.html** - User interface layout
 - **popup.js** - Interface logic and event handlers
 - **popup.css** - Styling and colors
-- **generate-icons.py** - Create icons automatically
 
 Edit any file, then:
 1. Go to `chrome://extensions/`
