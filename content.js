@@ -144,6 +144,176 @@ function extractStudentData() {
   return data;
 }
 
+// Function to create and inject the floating button
+async function injectFloatingButton() {
+  if (document.getElementById('extractor-floating-btn')) return;
+
+  const btn = document.createElement('button');
+  btn.id = 'extractor-floating-btn';
+  btn.innerHTML = '📥 Grab Data';
+  
+  // Load saved position
+  const storage = await chrome.storage.local.get(['btnBottom', 'btnRight']);
+  const savedBottom = storage.btnBottom || '20px';
+  const savedRight = storage.btnRight || '20px';
+
+  // Style the button
+  Object.assign(btn.style, {
+    position: 'fixed',
+    bottom: savedBottom,
+    right: savedRight,
+    zIndex: '999999',
+    padding: '12px 20px',
+    backgroundColor: '#007bff',
+    color: 'white',
+    border: 'none',
+    borderRadius: '50px',
+    cursor: 'move',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    fontWeight: 'bold',
+    fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    transition: 'transform 0.2s ease-in-out, background-color 0.2s ease-in-out',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
+    userSelect: 'none',
+    touchAction: 'none'
+  });
+
+  // Dragging logic variables
+  let isDragging = false;
+  let hasMoved = false;
+  let startX, startY;
+  let initialRight, initialBottom;
+
+  // Mouse Down
+  btn.onmousedown = (e) => {
+    isDragging = true;
+    hasMoved = false;
+    startX = e.clientX;
+    startY = e.clientY;
+    
+    // Get current position relative to viewport
+    const rect = btn.getBoundingClientRect();
+    initialRight = window.innerWidth - rect.right;
+    initialBottom = window.innerHeight - rect.bottom;
+    
+    btn.style.transition = 'none'; // Disable transition during drag
+    e.preventDefault();
+  };
+
+  // Mouse Move
+  const onMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    const dx = startX - e.clientX;
+    const dy = startY - e.clientY;
+    
+    if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      hasMoved = true;
+    }
+
+    const newRight = initialRight + dx;
+    const newBottom = initialBottom + dy;
+    
+    btn.style.right = `${newRight}px`;
+    btn.style.bottom = `${newBottom}px`;
+    btn.style.top = 'auto'; // Ensure we use bottom/right
+    btn.style.left = 'auto';
+  };
+
+  // Mouse Up
+  const onMouseUp = () => {
+    if (!isDragging) return;
+    isDragging = false;
+    btn.style.transition = 'transform 0.2s ease-in-out, background-color 0.2s ease-in-out';
+    
+    // Save final position
+    if (hasMoved) {
+      chrome.storage.local.set({
+        btnBottom: btn.style.bottom,
+        btnRight: btn.style.right
+      });
+    }
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+
+  // Hover effects
+  btn.onmouseover = () => {
+    if (!isDragging) {
+      btn.style.transform = 'scale(1.05)';
+      btn.style.backgroundColor = '#0056b3';
+    }
+  };
+  btn.onmouseout = () => {
+    if (!isDragging) {
+      btn.style.transform = 'scale(1)';
+      btn.style.backgroundColor = '#007bff';
+    }
+  };
+
+  // Click handler (only trigger if not moved)
+  btn.onclick = async () => {
+    if (hasMoved) return; // Don't trigger if it was a drag
+    
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Grabbing...';
+    
+    try {
+      const data = extractStudentData();
+      if (!data || Object.keys(data).length === 0) {
+        alert('No student data found on this page.');
+        btn.innerHTML = '📥 Grab Data';
+        btn.disabled = false;
+        return;
+      }
+
+      btn.innerHTML = '📤 Sending...';
+      
+      const webhookUrl = 'https://n8n.botbhai.net/webhook/versity-data-cse';
+      
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+
+      if (response.ok) {
+        btn.innerHTML = '✅ Success!';
+        btn.style.backgroundColor = '#28a745';
+        setTimeout(() => {
+          btn.innerHTML = '📥 Grab Data';
+          btn.style.backgroundColor = '#007bff';
+          btn.disabled = false;
+        }, 3000);
+      } else {
+        throw new Error('Server responded with ' + response.status);
+      }
+    } catch (error) {
+      console.error('Extraction error:', error);
+      btn.innerHTML = '❌ Error';
+      btn.style.backgroundColor = '#dc3545';
+      setTimeout(() => {
+        btn.innerHTML = '📥 Grab Data';
+        btn.style.backgroundColor = '#007bff';
+        btn.disabled = false;
+      }, 3000);
+    }
+  };
+
+  document.body.appendChild(btn);
+}
+
+// Inject button on load
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', injectFloatingButton);
+} else {
+  injectFloatingButton();
+}
+
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'extractData') {
