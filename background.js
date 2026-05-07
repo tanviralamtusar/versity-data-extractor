@@ -7,6 +7,4 @@ chrome.runtime.onInstalled.addListener(() => {
 
 
 // Clean up when tab is closed
-chrome.tabs.onRemoved.addListener((tabId) => {
-  tabRequests.delete(tabId);
-});
+

@@ -319,3 +319,21 @@ summary:hover {
     gap: 6px;
   }
 }
+
+.floating-btn {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  padding: 8px 12px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  z-index: 1000;
+}
+
+.floating-btn:hover {
+  background: #5568d3;
+}

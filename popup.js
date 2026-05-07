@@ -7,6 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (actionBtn) {
     actionBtn.addEventListener('click', handleAction);
   }
+  const floatingSendBtn = document.getElementById('floatingSendBtn');
+  if (floatingSendBtn) {
+    floatingSendBtn.addEventListener('click', handleAction);
+  }
 });
 
 function handleAction() {
