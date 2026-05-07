@@ -1,4 +1,6 @@
-const WEBHOOK_URL = 'https://n8n.botbhai.net/webhook/versity-data';
+const WEBHOOK_URL = 'https://n8n.botbhai.net/webhook/versity-data-cse';
+
+const WEBHOOK_URL_2 = 'https://n8n.botbhai.net/webhook/versity-data-bba';
 
 document.addEventListener('DOMContentLoaded', () => {
   const actionBtn = document.getElementById('actionBtn');
@@ -57,7 +59,10 @@ function handleAction() {
 
             console.log('Sending data to n8n:', extractedData);
 
-            fetch(WEBHOOK_URL, {
+            const selectedRoute = document.getElementById('webhookRoute').value;
+            const selectedUrl = selectedRoute === 'bba' ? 'https://n8n.botbhai.net/webhook/versity-data-bba' : 'https://n8n.botbhai.net/webhook/versity-data-cse';
+
+            fetch(selectedUrl, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json'
