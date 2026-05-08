@@ -9,14 +9,14 @@
     "scripting"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://studentportal.green.edu.bd/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://studentportal.green.edu.bd/*"],
       "js": ["content.js"],
       "run_at": "document_idle",
       "all_frames": false
@@ -25,7 +25,7 @@
   "web_accessible_resources": [
     {
       "resources": ["inject.js"],
-      "matches": ["<all_urls>"]
+      "matches": ["https://studentportal.green.edu.bd/*"]
     }
   ],
   "action": {
