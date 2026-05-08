@@ -140,6 +140,14 @@ body {
   content: ':';
 }
 
+.data-section h3 {
+  color: #764ba2 !important;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 6px;
+  margin-top: 10px;
+  font-size: 15px;
+}
+
 .empty-state {
   display: flex;
   align-items: center;

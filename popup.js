@@ -1,126 +1,128 @@
-const WEBHOOK_URL = 'https://n8n.botbhai.net/webhook/versity-data-cse';
+// popup.js
 
-const WEBHOOK_URL_2 = 'https://n8n.botbhai.net/webhook/versity-data-bba';
+const WEBHOOKS = {
+  cse: 'https://n8n.botbhai.net/webhook/versity-data-cse',
+  bba: 'https://n8n.botbhai.net/webhook/versity-data-bba',
+};
 
-document.addEventListener('DOMContentLoaded', () => {
-  const actionBtn = document.getElementById('actionBtn');
-  if (actionBtn) {
-    actionBtn.addEventListener('click', handleAction);
+document.addEventListener('DOMContentLoaded', async () => {
+  const routeSelect = document.getElementById('webhookRoute');
+  
+  // 1️⃣ Load saved route from storage
+  const storage = await chrome.storage.local.get(['selectedRoute']);
+  if (storage.selectedRoute) {
+    routeSelect.value = storage.selectedRoute;
   }
-  const floatingSendBtn = document.getElementById('floatingSendBtn');
-  if (floatingSendBtn) {
-    floatingSendBtn.addEventListener('click', handleAction);
-  }
+
+  // 2️⃣ Save route whenever it changes
+  routeSelect.addEventListener('change', (e) => {
+    chrome.storage.local.set({ selectedRoute: e.target.value });
+  });
+
+  document.getElementById('actionBtn').addEventListener('click', handleAction);
 });
 
-function handleAction() {
-  const statusDiv = document.getElementById('status');
-  const actionBtn = document.getElementById('actionBtn');
-  
-  statusDiv.textContent = '⏳ Grabbing data...';
-  statusDiv.className = 'status info';
+async function handleAction() {
+  const statusDiv  = document.getElementById('status');
+  const actionBtn  = document.getElementById('actionBtn');
+  const route      = document.getElementById('webhookRoute').value;
+  const webhookUrl = WEBHOOKS[route] || WEBHOOKS.cse;
+
+  setStatus('info', '⏳ Fetching from portal API...');
   actionBtn.disabled = true;
 
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs[0]) {
-      statusDiv.textContent = '❌ No active tab found';
-      statusDiv.className = 'status error';
+  // 1️⃣  Ask the active tab to call /api/StudentInfo (same-origin, has session cookie)
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) {
+    setStatus('error', '❌ No active tab found');
+    actionBtn.disabled = false;
+    return;
+  }
+
+  // Make sure content script is injected
+  await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] });
+
+  chrome.tabs.sendMessage(tab.id, { action: 'fetchStudentData' }, async (response) => {
+    if (chrome.runtime.lastError || !response) {
+      setStatus('error', '❌ Could not reach page. Are you on the student portal?');
       actionBtn.disabled = false;
       return;
     }
 
-    // Inject content script first if needed
-    chrome.scripting.executeScript({
-      target: { tabId: tabs[0].id },
-      files: ['content.js']
-    }, () => {
-      // After injection, send message to extract data
-      setTimeout(() => {
-        chrome.tabs.sendMessage(
-          tabs[0].id,
-          { action: 'extractData' },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              statusDiv.textContent = '❌ Error: ' + chrome.runtime.lastError.message;
-              statusDiv.className = 'status error';
-              actionBtn.disabled = false;
-              return;
-            }
+    if (!response.success) {
+      if (response.error === 'NOT_LOGGED_IN') {
+        setStatus('error', '🔒 Not logged in. Please log in to the portal first.');
+      } else {
+        setStatus('error', '❌ API Error: ' + response.error);
+      }
+      actionBtn.disabled = false;
+      return;
+    }
 
-            if (!response || !response.data || Object.keys(response.data).length === 0) {
-              statusDiv.textContent = '❌ No data found on page';
-              statusDiv.className = 'status error';
-              actionBtn.disabled = false;
-              return;
-            }
+    const data = response.data;
+    displayData(data);
 
-            const extractedData = response.data;
-            displayData(extractedData);
-            
-            // Send to webhook
-            statusDiv.textContent = '📤 Sending to n8n...';
-            statusDiv.className = 'status info';
+    // 2️⃣  Forward clean JSON to n8n
+    setStatus('info', `📤 Sending to n8n (${route.toUpperCase()})...`);
 
-            console.log('Sending data to n8n:', extractedData);
+    try {
+      const res = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
 
-            const selectedRoute = document.getElementById('webhookRoute').value;
-            const selectedUrl = selectedRoute === 'bba' ? 'https://n8n.botbhai.net/webhook/versity-data-bba' : 'https://n8n.botbhai.net/webhook/versity-data-cse';
+      if (res.ok) {
+        setStatus('success', `✅ Done! Data sent to ${route.toUpperCase()} sheet.`);
+      } else {
+        const txt = await res.text().catch(() => '');
+        setStatus('error', `❌ n8n error ${res.status}: ${txt.substring(0, 80)}`);
+      }
+    } catch (err) {
+      setStatus('error', '❌ Network error: ' + err.message);
+    }
 
-            fetch(selectedUrl, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(extractedData)
-            })
-            .then(async response => {
-              if (response.ok) {
-                statusDiv.textContent = '✅ Success! Data sent to n8n';
-                statusDiv.className = 'status success';
-              } else {
-                let errorMsg = `Error: ${response.status} ${response.statusText}`;
-                try {
-                  const errorData = await response.text();
-                  if (errorData) {
-                    errorMsg += ` - ${errorData.substring(0, 100)}`;
-                  }
-                } catch (e) {
-                  // ignore
-                }
-                statusDiv.textContent = '❌ ' + errorMsg;
-                statusDiv.className = 'status error';
-              }
-              actionBtn.disabled = false;
-            })
-            .catch(error => {
-              statusDiv.textContent = '❌ Error: ' + error.message;
-              statusDiv.className = 'status error';
-              actionBtn.disabled = false;
-            });
-
-          }
-        );
-      }, 100);
-    });
+    actionBtn.disabled = false;
   });
 }
 
+function setStatus(type, msg) {
+  const el = document.getElementById('status');
+  el.textContent  = msg;
+  el.className    = `status ${type}`;
+}
+
 function displayData(data) {
-  const dataDisplay = document.getElementById('dataDisplay');
-  if (!dataDisplay) return;
+  const display = document.getElementById('dataDisplay');
+  if (!display) return;
+
+  let html = '<div class="data-preview">';
   
-  let html = '<div class="data-preview"><h3>Extracted Data:</h3>';
-  for (const [key, value] of Object.entries(data)) {
-    if (value) {
-      html += `<div class="data-item"><strong>${key}</strong> ${escapeHtml(value)}</div>`;
-    }
+  if (data.post && Object.keys(data.post).length > 0) {
+    html += `<div class="data-section"><h3>POST API Response:</h3>${renderRows(data.post)}</div>`;
   }
+  
+  if (data.get && Object.keys(data.get).length > 0) {
+    html += `<div class="data-section" style="margin-top:20px; border-top:1px solid #ddd; padding-top:15px;"><h3>GET API Response:</h3>${renderRows(data.get)}</div>`;
+  }
+
+  if (html === '<div class="data-preview">') {
+    html += '<p>No data found.</p>';
+  }
+
   html += '</div>';
-  dataDisplay.innerHTML = html;
+  display.innerHTML = html;
+}
+
+function renderRows(obj) {
+  return Object.entries(obj)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `<div class="data-item"><strong>${escapeHtml(k)}</strong> ${escapeHtml(String(v))}</div>`)
+    .join('');
 }
 
 function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+  const d = document.createElement('div');
+  d.textContent = text;
+  return d.innerHTML;
 }
